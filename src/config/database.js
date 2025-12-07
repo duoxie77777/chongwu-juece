@@ -4,7 +4,7 @@ const mysql = require('mysql2/promise');
 const db = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'admin',
-    password: process.env.DB_PASSWORD || '123456',
+    password: process.env.DB_PASSWORD || '123123',
     database: process.env.DB_NAME || 'stray_pet_adopt',
     connectionLimit: 10,
     queueLimit: 0,

@@ -1,5 +1,6 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') })
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -23,10 +24,16 @@ const app = express();
 
 // 中间件配置
 app.use(cors()); // 处理跨域
-app.use(helmet()); // 添加安全相关的http头
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许跨域资源访问
+    contentSecurityPolicy: false // 禁用CSP，允许图片跨域加载
+})); // 添加安全相关的http头
 app.use(morgan('dev')); // http请求日志
 app.use(express.json()); // 解析json数据
 app.use(express.urlencoded({ extended: true })); // 解析urlencoded数据
+
+// 配置静态文件服务 - 用于访问上传的图片
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // 注册路由 - 以api开头
 app.use('/api', routes);
