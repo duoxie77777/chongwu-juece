@@ -1,28 +1,28 @@
 <template>
   <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
+    <!-- 只在非后台页面显示头部和底部 -->
+    <header-layout v-if="!$route.path.startsWith('/back')" />
+    <router-view></router-view>
+    <footer-layout v-if="!$route.path.startsWith('/back')" />
   </div>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+import headerLayout from '@/components/front/layouts/header.vue'
+import footerLayout from '@/components/front/layouts/footer.vue'
 
 export default {
   name: 'App',
   components: {
-    HelloWorld
+    headerLayout,
+    footerLayout
   }
 }
 </script>
 
 <style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
+* {
+  margin: 0;
+  padding: 0;
 }
 </style>
