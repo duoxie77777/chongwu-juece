@@ -500,8 +500,8 @@ export default {
         },
         goToVolunteer() {
             // 检查当前是否已经在志愿者页面，避免重复导航
-            if (this.$route.path !== '/volunteer/volunteer') {
-                this.$router.push('/volunteer/volunteer');
+            if (this.$route.path !== '/back') {
+                this.$router.replace('/back');
             }
         },
         goToCart() {

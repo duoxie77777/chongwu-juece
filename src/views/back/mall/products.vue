@@ -1,5 +1,15 @@
 <template>
     <div class="products-page">
+        <!-- 权限遮罩 -->
+        <div v-if="!isAdmin" class="permission-overlay">
+            <div class="permission-content">
+                <i class="el-icon-lock"></i>
+                <h2>无权限访问</h2>
+                <p>抱歉，只有管理员才能访问商城管理功能</p>
+                <el-button type="primary" @click="goBack">返回上一页</el-button>
+            </div>
+        </div>
+
         <!-- 页面标题 -->
         <div class="page-header">
             <div class="header-title">
@@ -312,9 +322,24 @@ export default {
                 if (url.startsWith('http')) return url
                 return `${API_BASE_URL.replace('/api', '')}${url}`
             }
+        },
+        // 检查是否是管理员
+        isAdmin() {
+            const userStr = localStorage.getItem('user')
+            if (!userStr) return false
+            try {
+                const user = JSON.parse(userStr)
+                return user.role === 'admin'
+            } catch (e) {
+                return false
+            }
         }
     },
     methods: {
+        // 返回上一页
+        goBack() {
+            this.$router.go(-1)
+        },
         // 加载商品列表
         async loadProducts() {
             this.loading = true
@@ -569,6 +594,45 @@ export default {
 </script>
 
 <style scoped lang="less">
+.permission-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+
+    .permission-content {
+        background: white;
+        padding: 60px 80px;
+        border-radius: 16px;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+
+        i {
+            font-size: 80px;
+            color: #f56c6c;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            font-size: 28px;
+            color: #333;
+            margin: 0 0 15px 0;
+        }
+
+        p {
+            font-size: 16px;
+            color: #666;
+            margin: 0 0 30px 0;
+        }
+    }
+}
+
 .page-header {
     display: flex;
     justify-content: space-between;

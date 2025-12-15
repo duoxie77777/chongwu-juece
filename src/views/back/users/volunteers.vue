@@ -74,6 +74,7 @@
                 :data="filteredVolunteers"
                 stripe
                 style="width: 100%"
+                v-loading="loading"
                 :default-sort="{ prop: 'serviceHours', order: 'descending' }"
             >
                 <el-table-column prop="id" label="ID" width="60"></el-table-column>
@@ -314,10 +315,14 @@
 </template>
 
 <script>
+import { getAllUsers, updateUser, deleteUser } from '@/utils/api'
+import { formatDateTime } from '@/utils/dateFormat'
+
 export default {
     name: 'VolunteersList',
     data() {
         return {
+            loading: false,
             searchQuery: '',
             filterLevel: '',
             filterStatus: '',
@@ -352,109 +357,75 @@ export default {
     },
     computed: {
         filteredVolunteers() {
-            return this.volunteers.slice(
-                (this.currentPage - 1) * this.pageSize,
-                this.currentPage * this.pageSize
-            )
+            let result = this.volunteers
+            
+            // 搜索过滤
+            if (this.searchQuery) {
+                const keyword = this.searchQuery.toLowerCase()
+                result = result.filter(v => 
+                    v.name.toLowerCase().includes(keyword) ||
+                    v.email.toLowerCase().includes(keyword)
+                )
+            }
+            
+            // 等级过滤
+            if (this.filterLevel) {
+                result = result.filter(v => v.level === this.filterLevel)
+            }
+            
+            // 状态过滤
+            if (this.filterStatus) {
+                result = result.filter(v => v.status === this.filterStatus)
+            }
+            
+            return result
         }
     },
     methods: {
         handleSearch() {
             this.currentPage = 1
-            this.loadVolunteers()
         },
-        loadVolunteers() {
-            const mockVolunteers = [
-                {
-                    id: 1,
-                    name: '张三',
-                    email: 'zhangsan@example.com',
-                    phone: '13800138000',
-                    address: '北京市朝阳区',
-                    avatar: 'https://via.placeholder.com/80?text=张三',
-                    level: 'senior',
-                    status: 'active',
-                    serviceHours: 120,
-                    activityCount: 25,
-                    animalsCared: 15,
-                    joinDate: '2023-01-15',
-                    skills: ['动物照护', '卫生清洁', '喂食护理', '志愿宣传'],
-                    bio: '资深志愿者，有多年的动物护理经验，对各种动物都很有爱心。'
-                },
-                {
-                    id: 2,
-                    name: '李四',
-                    email: 'lisi@example.com',
-                    phone: '13800138001',
-                    address: '上海市浦东新区',
-                    avatar: 'https://via.placeholder.com/80?text=李四',
-                    level: 'middle',
-                    status: 'active',
-                    serviceHours: 85,
-                    activityCount: 18,
-                    animalsCared: 10,
-                    joinDate: '2023-06-20',
-                    skills: ['喂食护理', '卫生清洁', '与动物互动'],
-                    bio: '中级志愿者，热心参与各种动物保护活动。'
-                },
-                {
-                    id: 3,
-                    name: '王五',
-                    email: 'wangwu@example.com',
-                    phone: '13800138002',
-                    address: '广州市天河区',
-                    avatar: 'https://via.placeholder.com/80?text=王五',
-                    level: 'junior',
-                    status: 'active',
-                    serviceHours: 32,
-                    activityCount: 8,
-                    animalsCared: 5,
-                    joinDate: '2024-01-10',
-                    skills: ['卫生清洁', '简单喂食'],
-                    bio: '初级志愿者，新加入团队，正在学习。'
-                },
-                {
-                    id: 4,
-                    name: '赵六',
-                    email: 'zhaoliu@example.com',
-                    phone: '13800138003',
-                    address: '深圳市南山区',
-                    avatar: 'https://via.placeholder.com/80?text=赵六',
-                    level: 'senior',
-                    status: 'inactive',
-                    serviceHours: 95,
-                    activityCount: 20,
-                    animalsCared: 12,
-                    joinDate: '2023-03-15',
-                    skills: ['动物照护', '医疗协助', '志愿宣传'],
-                    bio: '专业志愿者，具有兽医背景，当前休息中。'
-                },
-                {
-                    id: 5,
-                    name: '孙七',
-                    email: 'sunqi@example.com',
-                    phone: '13800138004',
-                    address: '杭州市西湖区',
-                    avatar: 'https://via.placeholder.com/80?text=孙七',
-                    level: 'middle',
-                    status: 'active',
-                    serviceHours: 76,
-                    activityCount: 16,
-                    animalsCared: 9,
-                    joinDate: '2023-08-05',
-                    skills: ['动物互动', '教育宣传', '社交媒体'],
-                    bio: '中级志愿者，擅长社交媒体宣传和教育。'
+        async loadVolunteers() {
+            this.loading = true
+            try {
+                const params = {
+                    role: 'volunteer',
+                    page: 1,
+                    size: 100 // 获取所有志愿者，前端过滤
                 }
-            ]
-
-            this.volunteers = mockVolunteers
-            this.total = mockVolunteers.length
-
-            // 计算统计数据
-            this.stats.total = mockVolunteers.length
-            this.stats.active = mockVolunteers.filter(v => v.status === 'active').length
-            this.stats.totalHours = mockVolunteers.reduce((sum, v) => sum + v.serviceHours, 0)
-            this.stats.totalActivities = mockVolunteers.reduce((sum, v) => sum + v.activityCount, 0)
+                
+                const res = await getAllUsers(params)
+                if (res.data.code === 200) {
+                    this.volunteers = res.data.data.map(user => ({
+                        id: user.id,
+                        name: user.real_name || user.username,
+                        email: user.email,
+                        phone: user.phone,
+                        address: user.address || '',
+                        avatar: user.avatar || `https://via.placeholder.com/80?text=${(user.real_name || user.username || 'V').charAt(0)}`,
+                        level: user.volunteer_level || 'junior',
+                        status: user.status === 1 ? 'active' : 'inactive',
+                        serviceHours: user.service_hours || 0,
+                        activityCount: user.activity_count || 0,
+                        animalsCared: user.animals_cared || 0,
+                        joinDate: user.create_time,
+                        skills: user.skills ? (Array.isArray(user.skills) ? user.skills : user.skills.split(',')) : [],
+                        bio: user.bio || ''
+                    }))
+                    this.total = this.volunteers.length
+                    
+                    // 计算统计数据
+                    this.stats.total = this.volunteers.length
+                    this.stats.active = this.volunteers.filter(v => v.status === 'active').length
+                    this.stats.totalHours = this.volunteers.reduce((sum, v) => sum + v.serviceHours, 0)
+                    this.stats.totalActivities = this.volunteers.reduce((sum, v) => sum + v.activityCount, 0)
+                }
+            } catch (error) {
+                console.error('加载志愿者列表失败:', error)
+                this.$message.error('加载志愿者列表失败')
+            } finally {
+                this.loading = false
+            }
         },
         handleView(row) {
             this.currentVolunteer = Object.assign({}, row)
@@ -464,30 +435,61 @@ export default {
             this.editFormData = Object.assign({}, row)
             this.editDialogVisible = true
         },
-        submitEdit() {
-            this.$refs.editForm.validate((valid) => {
-                if (valid) {
-                    this.submitLoading = true
-                    setTimeout(() => {
-                        this.submitLoading = false
-                        this.$message.success('志愿者信息更新成功')
-                        this.editDialogVisible = false
-                        this.loadVolunteers()
-                    }, 1000)
+        async submitEdit() {
+            try {
+                await this.$refs.editForm.validate()
+            } catch {
+                return
+            }
+            
+            this.submitLoading = true
+            try {
+                const updateData = {
+                    real_name: this.editFormData.name,
+                    email: this.editFormData.email,
+                    phone: this.editFormData.phone,
+                    address: this.editFormData.address,
+                    bio: this.editFormData.bio,
+                    volunteer_level: this.editFormData.level,
+                    status: this.editFormData.status === 'active' ? 1 : 0
                 }
-            })
+                
+                const res = await updateUser(this.editFormData.id, updateData)
+                if (res.data.code === 200) {
+                    this.$message.success('志愿者信息更新成功')
+                    this.editDialogVisible = false
+                    this.loadVolunteers()
+                } else {
+                    this.$message.error(res.data.message || '更新失败')
+                }
+            } catch (error) {
+                console.error('更新志愿者失败:', error)
+                this.$message.error(error.response?.data?.message || '更新志愿者失败')
+            } finally {
+                this.submitLoading = false
+            }
         },
-        handleDelete(row) {
-            this.$confirm(`确定删除志愿者 ${row.name} 吗？`, '提示', {
-                confirmButtonText: '确定',
-                cancelButtonText: '取消',
-                type: 'warning'
-            }).then(() => {
-                this.$message.success('志愿者已删除')
-                this.loadVolunteers()
-            }).catch(() => {
-                this.$message.info('已取消删除')
-            })
+        async handleDelete(row) {
+            try {
+                await this.$confirm(`确定删除志愿者 ${row.name} 吗？`, '提示', {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                })
+                
+                const res = await deleteUser(row.id)
+                if (res.data.code === 200) {
+                    this.$message.success('志愿者已删除')
+                    this.loadVolunteers()
+                } else {
+                    this.$message.error(res.data.message || '删除失败')
+                }
+            } catch (error) {
+                if (error !== 'cancel') {
+                    console.error('删除志愿者失败:', error)
+                    this.$message.error(error.response?.data?.message || '删除志愿者失败')
+                }
+            }
         },
         handlePageChange() {
             window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -512,7 +514,6 @@ export default {
             return map[level] || 'info'
         },
         formatDate(date) {
-            const { formatDateTime } = require('@/utils/dateFormat')
             return formatDateTime(date, 'date')
         }
     },

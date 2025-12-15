@@ -441,7 +441,7 @@ export default {
                         author_contact: item.author_contact,
                         cover: item.image_url,
                         content: item.content,
-                        status: item.status === 1 ? 'published' : 'draft', // 转换状态格式
+                        status: item.status, // 后端已转换为字符串
                         views: item.views || 0,
                         likes: item.likes || 0,
                         comments: item.comment_count || 0,

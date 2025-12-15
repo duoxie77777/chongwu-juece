@@ -104,9 +104,10 @@
         <!-- 用户表格 -->
         <div class="table-section">
             <el-table
-                :data="filteredUsers"
+                :data="users"
                 stripe
                 style="width: 100%"
+                v-loading="loading"
                 :default-sort="{ prop: 'createdAt', order: 'descending' }"
                 @selection-change="handleSelectionChange"
             >
@@ -153,26 +154,42 @@
                         >
                             查看
                         </el-button>
-                        <el-button
-                            v-if="isAdmin"
-                            size="small"
-                            type="info"
-                            plain
-                            icon="el-icon-edit"
-                            @click="handleEdit(scope.row)"
+                        <el-tooltip 
+                            :content="getEditDisabledReason(scope.row)" 
+                            placement="top" 
+                            :disabled="canEditUser(scope.row)"
                         >
-                            编辑
-                        </el-button>
-                        <el-button
-                            v-if="isAdmin"
-                            size="small"
-                            type="danger"
-                            plain
-                            icon="el-icon-delete"
-                            @click="handleDelete(scope.row)"
+                            <span>
+                                <el-button
+                                    size="small"
+                                    type="info"
+                                    plain
+                                    icon="el-icon-edit"
+                                    :disabled="!canEditUser(scope.row)"
+                                    @click="handleEdit(scope.row)"
+                                >
+                                    编辑
+                                </el-button>
+                            </span>
+                        </el-tooltip>
+                        <el-tooltip 
+                            :content="getDeleteDisabledReason(scope.row)" 
+                            placement="top" 
+                            :disabled="canDeleteUser(scope.row)"
                         >
-                            删除
-                        </el-button>
+                            <span>
+                                <el-button
+                                    size="small"
+                                    type="danger"
+                                    plain
+                                    icon="el-icon-delete"
+                                    :disabled="!canDeleteUser(scope.row)"
+                                    @click="handleDelete(scope.row)"
+                                >
+                                    删除
+                                </el-button>
+                            </span>
+                        </el-tooltip>
                     </template>
                 </el-table-column>
             </el-table>
@@ -291,10 +308,60 @@
                         show-word-limit
                     ></el-input>
                 </el-form-item>
+                <el-form-item label="头像">
+                    <div class="avatar-upload">
+                        <div class="avatar-preview">
+                            <img :src="editFormData.avatar || 'https://via.placeholder.com/100'" alt="头像" />
+                        </div>
+                        <el-upload
+                            class="avatar-uploader"
+                            action=""
+                            :show-file-list="false"
+                            :before-upload="beforeAvatarUpload"
+                            :http-request="uploadAvatar"
+                        >
+                            <el-button size="small" type="primary">更换头像</el-button>
+                        </el-upload>
+                    </div>
+                </el-form-item>
+                <el-form-item label="修改密码">
+                    <el-button type="warning" size="small" @click="showPasswordDialog">重置密码</el-button>
+                </el-form-item>
             </el-form>
             <span slot="footer" class="dialog-footer">
                 <el-button @click="editDialogVisible = false">取消</el-button>
                 <el-button type="primary" @click="submitEdit" :loading="submitLoading">保存</el-button>
+            </span>
+        </el-dialog>
+
+        <!-- 修改密码对话框 -->
+        <el-dialog
+            title="重置密码"
+            :visible.sync="passwordDialogVisible"
+            width="450px"
+            :close-on-click-modal="false"
+        >
+            <el-form ref="passwordForm" :model="passwordFormData" :rules="passwordRules" label-width="100px">
+                <el-form-item label="新密码" prop="newPassword">
+                    <el-input
+                        v-model="passwordFormData.newPassword"
+                        type="password"
+                        placeholder="请输入新密码"
+                        show-password
+                    ></el-input>
+                </el-form-item>
+                <el-form-item label="确认密码" prop="confirmPassword">
+                    <el-input
+                        v-model="passwordFormData.confirmPassword"
+                        type="password"
+                        placeholder="请再次输入新密码"
+                        show-password
+                    ></el-input>
+                </el-form-item>
+            </el-form>
+            <span slot="footer" class="dialog-footer">
+                <el-button @click="passwordDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="submitPassword" :loading="passwordLoading">确定</el-button>
             </span>
         </el-dialog>
     </div>
@@ -302,11 +369,22 @@
 
 <script>
 import { formatDateTime } from '@/utils/dateFormat'
+import { getAllUsers, updateUser, deleteUser, adminResetPassword, uploadFile } from '@/utils/api'
+
+const API_BASE_URL = 'http://localhost:8889'
 
 export default {
     name: 'UsersList',
     data() {
+        const validateConfirmPassword = (rule, value, callback) => {
+            if (value !== this.passwordFormData.newPassword) {
+                callback(new Error('两次输入的密码不一致'))
+            } else {
+                callback()
+            }
+        }
         return {
+            loading: false,
             searchForm: {
                 keyword: '',
                 status: '',
@@ -319,9 +397,15 @@ export default {
             selectedUsers: [],
             viewDialogVisible: false,
             editDialogVisible: false,
+            passwordDialogVisible: false,
             currentUser: null,
             editFormData: {},
+            passwordFormData: {
+                newPassword: '',
+                confirmPassword: ''
+            },
             submitLoading: false,
+            passwordLoading: false,
             statistics: {
                 total: 0,
                 active: 0,
@@ -336,16 +420,20 @@ export default {
                 phone: [
                     { required: true, message: '请输入手机号', trigger: 'blur' }
                 ]
+            },
+            passwordRules: {
+                newPassword: [
+                    { required: true, message: '请输入新密码', trigger: 'blur' },
+                    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+                ],
+                confirmPassword: [
+                    { required: true, message: '请确认密码', trigger: 'blur' },
+                    { validator: validateConfirmPassword, trigger: 'blur' }
+                ]
             }
         }
     },
     computed: {
-        filteredUsers() {
-            return this.users.slice(
-                (this.currentPage - 1) * this.pageSize,
-                this.currentPage * this.pageSize
-            )
-        },
         isAdmin() {
             // 检查当前登录用户是否是管理员
             const userStr = localStorage.getItem('user')
@@ -356,9 +444,72 @@ export default {
             } catch (e) {
                 return false
             }
+        },
+        isVolunteer() {
+            // 检查当前登录用户是否是志愿者
+            const userStr = localStorage.getItem('user')
+            if (!userStr) return false
+            try {
+                const user = JSON.parse(userStr)
+                return user.role === 'volunteer'
+            } catch (e) {
+                return false
+            }
+        },
+        currentUserRole() {
+            const userStr = localStorage.getItem('user')
+            if (!userStr) return ''
+            try {
+                const user = JSON.parse(userStr)
+                return user.role || ''
+            } catch (e) {
+                return ''
+            }
         }
     },
     methods: {
+        // 检查是否可以编辑用户
+        canEditUser(row) {
+            // admin可以编辑所有用户
+            if (this.isAdmin) return true
+            // 志愿者不能编辑admin用户
+            if (this.isVolunteer && row.role === 'admin') return false
+            // 志愿者不能编辑其他志愿者
+            if (this.isVolunteer && row.role === 'volunteer') return false
+            // 其他情况允许编辑
+            return true
+        },
+        // 检查是否可以删除用户
+        canDeleteUser(row) {
+            // admin可以删除所有用户
+            if (this.isAdmin) return true
+            // 志愿者不能删除admin用户
+            if (this.isVolunteer && row.role === 'admin') return false
+            // 志愿者不能删除其他志愿者
+            if (this.isVolunteer && row.role === 'volunteer') return false
+            // 其他情况允许删除
+            return true
+        },
+        // 获取编辑禁用原因
+        getEditDisabledReason(row) {
+            if (this.isVolunteer && row.role === 'admin') {
+                return '志愿者无权编辑管理员信息'
+            }
+            if (this.isVolunteer && row.role === 'volunteer') {
+                return '志愿者无权编辑其他志愿者信息'
+            }
+            return ''
+        },
+        // 获取删除禁用原因
+        getDeleteDisabledReason(row) {
+            if (this.isVolunteer && row.role === 'admin') {
+                return '志愿者无权删除管理员'
+            }
+            if (this.isVolunteer && row.role === 'volunteer') {
+                return '志愿者无权删除其他志愿者'
+            }
+            return ''
+        },
         handleSearch() {
             this.currentPage = 1
             this.loadUsers()
@@ -372,100 +523,52 @@ export default {
             this.currentPage = 1
             this.loadUsers()
         },
-        calculateStatistics() {
-            this.statistics.total = this.users.length
-            this.statistics.active = this.users.filter(item => item.status === 'active').length
-            this.statistics.disabled = this.users.filter(item => item.status === 'disabled').length
-            this.statistics.volunteer = this.users.filter(item => item.role === 'volunteer').length
+        calculateStatistics(users) {
+            this.statistics.total = this.total
+            this.statistics.active = users.filter(item => item.status === 'active' || item.status === 1).length
+            this.statistics.disabled = users.filter(item => item.status === 'disabled' || item.status === 0).length
+            this.statistics.volunteer = users.filter(item => item.role === 'volunteer').length
         },
-        loadUsers() {
-            // 模拟获取用户列表
-            let mockUsers = [
-                {
-                    id: 1,
-                    username: '张三',
-                    email: 'zhangsan@example.com',
-                    phone: '13800138000',
-                    address: '北京市朝阳区',
-                    avatar: 'https://via.placeholder.com/40?text=ZS',
-                    role: 'adopter',
-                    status: 'active',
-                    adoptionCount: 2,
-                    createdAt: '2024-01-15',
-                    bio: '爱动物的热心市民'
-                },
-                {
-                    id: 2,
-                    username: '李四',
-                    email: 'lisi@example.com',
-                    phone: '13800138001',
-                    address: '上海市浦东新区',
-                    avatar: 'https://via.placeholder.com/40?text=LS',
-                    role: 'volunteer',
-                    status: 'active',
-                    adoptionCount: 0,
-                    createdAt: '2024-01-10',
-                    bio: '志愿者，热心帮助失业动物'
-                },
-                {
-                    id: 3,
-                    username: '王五',
-                    email: 'wangwu@example.com',
-                    phone: '13800138002',
-                    address: '广州市天河区',
-                    avatar: 'https://via.placeholder.com/40?text=WW',
-                    role: 'user',
-                    status: 'active',
-                    adoptionCount: 1,
-                    createdAt: '2024-01-05',
-                    bio: '普通用户'
-                },
-                {
-                    id: 4,
-                    username: '赵六',
-                    email: 'zhaoliu@example.com',
-                    phone: '13800138003',
-                    address: '深圳市南山区',
-                    avatar: 'https://via.placeholder.com/40?text=ZL',
-                    role: 'adopter',
-                    status: 'disabled',
-                    adoptionCount: 3,
-                    createdAt: '2023-12-25',
-                    bio: '已禁用账户'
-                },
-                {
-                    id: 5,
-                    username: '孙七',
-                    email: 'sunqi@example.com',
-                    phone: '13800138004',
-                    address: '杭州市西湖区',
-                    avatar: 'https://via.placeholder.com/40?text=SQ',
-                    role: 'volunteer',
-                    status: 'active',
-                    adoptionCount: 0,
-                    createdAt: '2023-12-20',
-                    bio: '资深志愿者，经验丰富'
+        async loadUsers() {
+            this.loading = true
+            try {
+                const params = {
+                    page: this.currentPage,
+                    size: this.pageSize
                 }
-            ]
-
-            // 根据搜索条件过滤
-            if (this.searchForm.keyword) {
-                const keyword = this.searchForm.keyword.toLowerCase()
-                mockUsers = mockUsers.filter(user => 
-                    user.username.toLowerCase().includes(keyword) || 
-                    user.email.toLowerCase().includes(keyword)
-                )
+                
+                if (this.searchForm.keyword) {
+                    params.keyword = this.searchForm.keyword
+                }
+                if (this.searchForm.status) {
+                    // 后端使用 0/1 表示状态
+                    params.status = this.searchForm.status === 'active' ? 1 : 0
+                }
+                if (this.searchForm.role) {
+                    params.role = this.searchForm.role
+                }
+                
+                const res = await getAllUsers(params)
+                if (res.data.code === 200) {
+                    // 处理数据格式
+                    this.users = res.data.data.map(user => ({
+                        ...user,
+                        username: user.real_name || user.username,
+                        avatar: user.avatar || `https://via.placeholder.com/40?text=${(user.real_name || user.username || 'U').charAt(0)}`,
+                        status: user.status === 1 ? 'active' : 'disabled',
+                        createdAt: user.create_time,
+                        adoptionCount: user.adoption_count || 0,
+                        bio: user.bio || ''
+                    }))
+                    this.total = res.data.pagination?.total || this.users.length
+                    this.calculateStatistics(this.users)
+                }
+            } catch (error) {
+                console.error('加载用户列表失败:', error)
+                this.$message.error('加载用户列表失败')
+            } finally {
+                this.loading = false
             }
-            if (this.searchForm.status) {
-                mockUsers = mockUsers.filter(user => user.status === this.searchForm.status)
-            }
-            if (this.searchForm.role) {
-                mockUsers = mockUsers.filter(user => user.role === this.searchForm.role)
-            }
-
-            this.users = mockUsers
-            this.total = mockUsers.length
-            this.calculateStatistics()
         },
         handleSelectionChange(selection) {
             this.selectedUsers = selection
@@ -478,36 +581,73 @@ export default {
             this.editFormData = Object.assign({}, row)
             this.editDialogVisible = true
         },
-        submitEdit() {
-            this.$refs.editForm.validate((valid) => {
-                if (valid) {
-                    this.submitLoading = true
-                    setTimeout(() => {
-                        this.submitLoading = false
-                        this.$message.success('用户信息更新成功')
-                        this.editDialogVisible = false
-                        this.loadUsers()
-                    }, 1000)
+        async submitEdit() {
+            try {
+                await this.$refs.editForm.validate()
+            } catch {
+                return
+            }
+            
+            this.submitLoading = true
+            try {
+                const updateData = {
+                    email: this.editFormData.email,
+                    phone: this.editFormData.phone,
+                    address: this.editFormData.address,
+                    bio: this.editFormData.bio,
+                    avatar: this.editFormData.avatar
                 }
-            })
+                
+                // 只有管理员可以修改角色和状态
+                if (this.isAdmin) {
+                    updateData.role = this.editFormData.role
+                    updateData.status = this.editFormData.status === 'active' ? 1 : 0
+                }
+                
+                const res = await updateUser(this.editFormData.id, updateData)
+                if (res.data.code === 200) {
+                    this.$message.success('用户信息更新成功')
+                    this.editDialogVisible = false
+                    this.loadUsers()
+                } else {
+                    this.$message.error(res.data.message || '更新失败')
+                }
+            } catch (error) {
+                console.error('更新用户失败:', error)
+                this.$message.error(error.response?.data?.message || '更新用户失败')
+            } finally {
+                this.submitLoading = false
+            }
         },
-        handleDelete(row) {
-            this.$confirm(`确定删除用户 ${row.username} 吗？`, '提示', {
-                confirmButtonText: '确定',
-                cancelButtonText: '取消',
-                type: 'warning'
-            }).then(() => {
-                this.$message.success('用户已删除')
-                this.loadUsers()
-            }).catch(() => {
-                this.$message.info('已取消删除')
-            })
+        async handleDelete(row) {
+            try {
+                await this.$confirm(`确定删除用户 ${row.username} 吗？`, '提示', {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                })
+                
+                const res = await deleteUser(row.id)
+                if (res.data.code === 200) {
+                    this.$message.success('用户已删除')
+                    this.loadUsers()
+                } else {
+                    this.$message.error(res.data.message || '删除失败')
+                }
+            } catch (error) {
+                if (error !== 'cancel') {
+                    console.error('删除用户失败:', error)
+                    this.$message.error(error.response?.data?.message || '删除用户失败')
+                }
+            }
         },
         handlePageChange() {
+            this.loadUsers()
             window.scrollTo({ top: 0, behavior: 'smooth' })
         },
         handlePageSizeChange() {
             this.currentPage = 1
+            this.loadUsers()
         },
         getRoleLabel(role) {
             const map = {
@@ -527,6 +667,76 @@ export default {
         },
         formatDate(date) {
             return formatDateTime(date, 'datetime')
+        },
+        // 显示密码修改对话框
+        showPasswordDialog() {
+            this.passwordFormData = {
+                newPassword: '',
+                confirmPassword: ''
+            }
+            this.passwordDialogVisible = true
+        },
+        // 提交密码修改
+        async submitPassword() {
+            try {
+                await this.$refs.passwordForm.validate()
+            } catch {
+                return
+            }
+            
+            this.passwordLoading = true
+            try {
+                const res = await adminResetPassword(this.editFormData.id, {
+                    newPassword: this.passwordFormData.newPassword
+                })
+                if (res.data.code === 200) {
+                    this.$message.success('密码重置成功')
+                    this.passwordDialogVisible = false
+                } else {
+                    this.$message.error(res.data.message || '密码重置失败')
+                }
+            } catch (error) {
+                console.error('密码重置失败:', error)
+                this.$message.error(error.response?.data?.message || '密码重置失败')
+            } finally {
+                this.passwordLoading = false
+            }
+        },
+        // 头像上传前验证
+        beforeAvatarUpload(file) {
+            const isImage = file.type.startsWith('image/')
+            const isLt2M = file.size / 1024 / 1024 < 2
+
+            if (!isImage) {
+                this.$message.error('只能上传图片文件!')
+                return false
+            }
+            if (!isLt2M) {
+                this.$message.error('图片大小不能超过 2MB!')
+                return false
+            }
+            return true
+        },
+        // 上传头像
+        async uploadAvatar(options) {
+            try {
+                const res = await uploadFile(options.file)
+                if (res.data.code === 200) {
+                    // 获取返回的图片URL
+                    let avatarUrl = res.data.data.url
+                    // 如果是相对路径，添加完整URL
+                    if (avatarUrl && !avatarUrl.startsWith('http')) {
+                        avatarUrl = `${API_BASE_URL}${avatarUrl}`
+                    }
+                    this.editFormData.avatar = avatarUrl
+                    this.$message.success('头像上传成功')
+                } else {
+                    this.$message.error(res.data.message || '头像上传失败')
+                }
+            } catch (error) {
+                console.error('头像上传失败:', error)
+                this.$message.error('头像上传失败')
+            }
         }
     },
     mounted() {
@@ -810,6 +1020,26 @@ export default {
 
     .table-section {
         overflow-x: auto;
+    }
+}
+
+.avatar-upload {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    .avatar-preview {
+        img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e4e7ed;
+        }
+    }
+
+    .avatar-uploader {
+        display: inline-block;
     }
 }
 </style>

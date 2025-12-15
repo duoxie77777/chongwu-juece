@@ -41,19 +41,6 @@
                             <span v-for="(tag, index) in story.tags" :key="index" class="tag">{{ tag }}</span>
                         </div>
 
-                        <!-- 关联动物 -->
-                        <div class="related-animal" v-if="story.animalInfo">
-                            <h3>故事中的动物</h3>
-                            <div class="animal-card">
-                                <div class="animal-avatar" :style="{ backgroundImage: 'url(' + story.animalInfo.image + ')' }"></div>
-                                <div class="animal-details">
-                                    <h4>{{ story.animalInfo.name }}</h4>
-                                    <p>{{ story.animalInfo.type }}</p>
-                                    <p>{{ story.animalInfo.breed }}</p>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- 动作按钮 -->
                         <div class="action-buttons">
                             <button class="btn btn-primary" @click="handleAdopt">了解领养</button>
@@ -613,52 +600,6 @@ export default {
                         border-radius: 20px;
                         font-size: 0.9rem;
                         border: 1px solid #d52b1e;
-                    }
-                }
-
-                .related-animal {
-                    background-color: #f8f9ff;
-                    padding: 20px;
-                    border-radius: 8px;
-                    margin-bottom: 30px;
-
-                    h3 {
-                        font-size: 1.2rem;
-                        color: #333;
-                        margin-bottom: 15px;
-                        font-weight: bold;
-                    }
-
-                    .animal-card {
-                        display: flex;
-                        gap: 15px;
-                        align-items: center;
-
-                        .animal-avatar {
-                            width: 80px;
-                            height: 80px;
-                            border-radius: 8px;
-                            background-size: cover;
-                            background-position: center;
-                            flex-shrink: 0;
-                        }
-
-                        .animal-details {
-                            flex: 1;
-
-                            h4 {
-                                font-size: 1.1rem;
-                                color: #333;
-                                margin-bottom: 5px;
-                                font-weight: bold;
-                            }
-
-                            p {
-                                font-size: 0.95rem;
-                                color: #666;
-                                margin: 3px 0;
-                            }
-                        }
                     }
                 }
 

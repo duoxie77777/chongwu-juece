@@ -161,10 +161,64 @@ export const login = (loginData) => {
 /**
  * 获取所有用户
  */
-export const getAllUsers = () => {
-    return request('/user/users', {
+export const getAllUsers = (params = {}) => {
+    const queryString = new URLSearchParams(params).toString()
+    return request(`/user/users?${queryString}`, {
         method: 'GET'
     })
+}
+
+/**
+ * 获取用户详情
+ */
+export const getUserDetail = (id) => {
+    return request(`/user/users/${id}`, {
+        method: 'GET'
+    })
+}
+
+/**
+ * 更新用户信息（管理员）
+ */
+export const updateUser = (id, userData) => {
+    return request(`/user/users/${id}`, {
+        method: 'PUT',
+        body: userData
+    })
+}
+
+/**
+ * 删除用户（管理员）
+ */
+export const deleteUser = (id) => {
+    return request(`/user/users/${id}`, {
+        method: 'DELETE'
+    })
+}
+
+/**
+ * 管理员重置用户密码
+ */
+export const adminResetPassword = (id, data) => {
+    return request(`/user/users/${id}/reset-password`, {
+        method: 'POST',
+        body: data
+    })
+}
+
+/**
+ * 上传文件
+ */
+export const uploadFile = (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+    }).then(res => res.json()).then(data => ({ data }))
 }
 
 /**
@@ -294,6 +348,44 @@ export const getUserVolunteerInfo = () => {
 export const applyVolunteer = (data) => {
     return request('/user/volunteer', {
         method: 'POST',
+        body: data
+    })
+}
+
+/**
+ * 获取志愿者申请列表（管理员）
+ */
+export const getVolunteerApplications = (params = {}) => {
+    const queryString = new URLSearchParams(params).toString()
+    return request(`/user/volunteer-applications?${queryString}`, {
+        method: 'GET'
+    })
+}
+
+/**
+ * 获取志愿者申请统计（管理员）
+ */
+export const getVolunteerApplicationStats = () => {
+    return request('/user/volunteer-applications/stats', {
+        method: 'GET'
+    })
+}
+
+/**
+ * 获取志愿者申请详情（管理员）
+ */
+export const getVolunteerApplicationDetail = (id) => {
+    return request(`/user/volunteer-applications/${id}`, {
+        method: 'GET'
+    })
+}
+
+/**
+ * 审批志愿者申请（管理员）
+ */
+export const updateVolunteerApplicationStatus = (id, data) => {
+    return request(`/user/volunteer-applications/${id}`, {
+        method: 'PUT',
         body: data
     })
 }
@@ -1278,6 +1370,9 @@ export default {
     register,
     login,
     getAllUsers,
+    getUserDetail,
+    updateUser,
+    deleteUser,
     getCurrentUser,
     updateUserProfile,
     changePassword,

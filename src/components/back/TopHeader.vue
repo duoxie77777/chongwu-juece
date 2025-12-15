@@ -38,11 +38,32 @@ export default {
     name: 'TopHeader',
     data() {
         return {
-            userName: 'Admin',
-            userAvatar: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNPCMNSZSBJED0iMjQiIGN5PSIyNCIgcj0iMjQiIGZpbGw9IiNlOGU4ZTgiLz4KPGN1cnZlIGQ9Ik0yNCAxNkMyOC40MTgyIDE2IDMyIDEyLjQxODIgMzIgOEMzMiAzLjU4MTgyIDI4LjQxODIgMCAyNCAwQzE5LjU4MTggMCAxNiAzLjU4MTgyIDE2IDhDMTYgMTIuNDE4MiAxOS41ODE4IDE2IDI0IDE2WiIgZmlsbD0id2hpdGUiLz4KPFNWRZ4='
+            defaultAvatar: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIyNCIgY3k9IjI0IiByPSIyNCIgZmlsbD0iI2U4ZThlOCIvPjxjaXJjbGUgY3g9IjI0IiBjeT0iMTgiIHI9IjgiIGZpbGw9IiNjY2MiLz48cGF0aCBkPSJNOCA0MmMwLTguODM3IDcuMTYzLTE2IDE2LTE2czE2IDcuMTYzIDE2IDE2IiBmaWxsPSIjY2NjIi8+PC9zdmc+'
         }
     },
     computed: {
+        // 从localStorage获取用户信息
+        userInfo() {
+            const userStr = localStorage.getItem('user')
+            if (userStr) {
+                try {
+                    return JSON.parse(userStr)
+                } catch (e) {
+                    return null
+                }
+            }
+            return null
+        },
+        userName() {
+            return this.userInfo?.username || this.userInfo?.real_name || 'Admin'
+        },
+        userAvatar() {
+            const avatar = this.userInfo?.avatar
+            if (avatar && avatar.trim() !== '') {
+                return avatar
+            }
+            return this.defaultAvatar
+        },
         currentPageTitle() {
             const routeMeta = {
                 '/back/dashboard': '仪表板',

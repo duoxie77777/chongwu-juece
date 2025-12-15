@@ -24,10 +24,13 @@
             <div class="service">
                 <h2>我们的服务</h2>
                 <div class="service-section">
-                    <div v-for="(item, index) in serviceItems" :key="index" class="service-item">
-                        <div class="service-icon">{{ item.icon }}</div>
+                    <div v-for="(item, index) in serviceItems" :key="index" class="service-item" @click="goToService(item.link)">
+                        <div class="service-icon-wrapper">
+                            <span class="service-icon">{{ item.icon }}</span>
+                        </div>
                         <h3>{{ item.title }}</h3>
                         <p>{{ item.description }}</p>
+                        <span class="service-arrow">→</span>
                     </div>
                 </div>
             </div>
@@ -47,8 +50,7 @@
             <h2>我们的工作</h2>
             <div class="four-column-wrapper">
                 <div class="four-column-container">
-                    <div v-for="(item, index) in fourColumnItems" :key="index" class="four-column-item">
-                        <!-- 添加遮罩层 -->
+                    <div v-for="(item, index) in fourColumnItems" :key="index" class="four-column-item" @click="showWorkDetail(item)">
                         <div class="item-overlay" :style="{ backgroundImage: 'url(' + item.image + ')' }"></div>
                         <div class="item-content">
                             <h3>{{ item.title }}</h3>
@@ -57,6 +59,20 @@
                 </div>
             </div>
         </section>
+
+        <!-- 工作详情弹窗 -->
+        <el-dialog
+            :title="currentWork.title"
+            :visible.sync="workDialogVisible"
+            width="600px"
+            center
+            class="work-detail-dialog"
+        >
+            <div class="work-dialog-body">
+                <div class="work-dialog-image" :style="{ backgroundImage: 'url(' + currentWork.image + ')' }"></div>
+                <p class="work-dialog-desc">{{ currentWork.description }}</p>
+            </div>
+        </el-dialog>
 
         <!-- 领养列表部分 -->
         <section class="adoption-list-section">
@@ -176,37 +192,46 @@ export default {
                 {
                     icon: '🐾',
                     title: '领养',
-                    description: '给流浪动物一个温暖的家'
+                    description: '给流浪动物一个温暖的家',
+                    link: '/adoption/list'
                 },
                 {
                     icon: '❤️',
                     title: '捐赠',
-                    description: '您的爱心帮助更多生命'
+                    description: '您的爱心帮助更多生命',
+                    link: '/donation'
                 },
                 {
                     icon: '🤝',
                     title: '志愿者',
-                    description: '加入我们成为动物守护者'
+                    description: '加入我们成为动物守护者',
+                    link: '/volunteer/apply'
                 }
             ],
             fourColumnItems: [
                 {
                     title: '救·保护',
-                    image: require('@/assets/front/index/wrapper-1.jpg')
+                    image: require('@/assets/front/index/wrapper-1.jpg'),
+                    description: '我们积极救助流浪动物，为受伤、生病或被遗弃的动物提供紧急救援和医疗服务。每一个生命都值得被尊重和保护，我们致力于为它们创造安全的庇护环境。'
                 },
                 {
                     title: '送养·家访',
-                    image: require('@/assets/front/index/wrapper-2.jpg')
+                    image: require('@/assets/front/index/wrapper-2.jpg'),
+                    description: '我们为每一只待领养的动物寻找合适的家庭。在领养前后，我们会进行家访评估，确保动物能够得到良好的照顾，并提供持续的领养后支持。'
                 },
                 {
                     title: '人畜共患病',
-                    image: require('@/assets/front/index/wrapper-3.jpg')
+                    image: require('@/assets/front/index/wrapper-3.jpg'),
+                    description: '我们关注人畜共患病的预防和控制，为所有救助动物进行健康检查、疫苗接种和驱虫处理，保障动物和领养家庭的健康安全。'
                 },
                 {
                     title: '教育·活动',
-                    image: require('@/assets/front/index/wrapper-4.jpg')
+                    image: require('@/assets/front/index/wrapper-4.jpg'),
+                    description: '我们定期举办动物保护宣传活动、领养日和志愿者培训，提高公众对动物福利的认识，倡导"领养代替购买"的理念，共建人与动物和谐共处的社会。'
                 }
             ],
+            workDialogVisible: false,
+            currentWork: {},
             statsData: [
                 { number: "0", label: "成功领养" },
                 { number: "0", label: "志愿工作者" },
@@ -498,6 +523,15 @@ export default {
         },
         goToVolunteerApply() {
             this.$router.push('/volunteer/apply')
+        },
+        goToService(link) {
+            if (link) {
+                this.$router.push(link)
+            }
+        },
+        showWorkDetail(item) {
+            this.currentWork = item
+            this.workDialogVisible = true
         }
     }
 }
@@ -607,31 +641,94 @@ export default {
         .service-item {
             text-align: center;
             width: 30%;
-            padding: 30px;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-            background: white;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 20px 40px;
+            border-radius: 16px;
+            transition: all 0.4s ease;
+            background: linear-gradient(145deg, #ffffff 0%, #f8f9ff 100%);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
 
-            &:hover {
-                transform: translateY(-10px);
-                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            &::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 4px;
+                background: linear-gradient(90deg, #d52b1e 0%, #ff6b5b 100%);
+                transform: scaleX(0);
+                transition: transform 0.4s ease;
             }
 
-            .service-icon {
-                font-size: 3rem;
-                margin-bottom: 20px;
+            &:hover {
+                transform: translateY(-15px);
+                box-shadow: 0 20px 50px rgba(213, 43, 30, 0.15);
+
+                &::before {
+                    transform: scaleX(1);
+                }
+
+                .service-icon-wrapper {
+                    background: linear-gradient(135deg, #d52b1e 0%, #ff6b5b 100%);
+                    transform: scale(1.1);
+
+                    .service-icon {
+                        filter: grayscale(100%) brightness(10);
+                    }
+                }
+
+                .service-arrow {
+                    opacity: 1;
+                    transform: translateX(0);
+                    color: #d52b1e;
+                }
+
+                h3 {
+                    color: #d52b1e;
+                }
+            }
+
+            .service-icon-wrapper {
+                width: 90px;
+                height: 90px;
+                margin: 0 auto 25px;
+                background: linear-gradient(135deg, #fff5f4 0%, #ffe8e6 100%);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.4s ease;
+                box-shadow: 0 8px 25px rgba(213, 43, 30, 0.1);
+
+                .service-icon {
+                    font-size: 2.8rem;
+                    transition: all 0.4s ease;
+                }
             }
 
             h3 {
-                font-size: 1.8rem;
+                font-size: 1.6rem;
                 margin-bottom: 15px;
                 color: #333;
+                font-weight: 600;
+                transition: color 0.3s ease;
             }
 
             p {
-                font-size: 1.2rem;
+                font-size: 1.1rem;
                 color: #666;
+                line-height: 1.6;
+                margin-bottom: 20px;
+            }
+
+            .service-arrow {
+                font-size: 1.5rem;
+                color: #999;
+                opacity: 0;
+                transform: translateX(-10px);
+                transition: all 0.3s ease;
+                display: inline-block;
             }
         }
     }
@@ -1365,6 +1462,47 @@ export default {
                     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
                 }
             }
+        }
+    }
+}
+
+/* 工作详情弹窗样式 */
+.work-detail-dialog {
+    ::v-deep .el-dialog {
+        border-radius: 12px;
+        overflow: hidden;
+
+        .el-dialog__header {
+            background: #f8f9ff;
+            padding: 20px 25px;
+            border-bottom: 1px solid #eee;
+
+            .el-dialog__title {
+                font-size: 1.4rem;
+                font-weight: bold;
+                color: #333;
+            }
+        }
+
+        .el-dialog__body {
+            padding: 0;
+        }
+    }
+
+    .work-dialog-body {
+        .work-dialog-image {
+            width: 100%;
+            height: 280px;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .work-dialog-desc {
+            padding: 25px 30px;
+            font-size: 1.05rem;
+            color: #666;
+            line-height: 1.8;
+            margin: 0;
         }
     }
 }

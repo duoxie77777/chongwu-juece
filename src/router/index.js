@@ -158,6 +158,11 @@ const routes = [
                 name: 'usersVolunteers',
                 component: () => import('@/views/back/users/volunteers.vue')
             },
+            {
+                path: 'users/volunteer-applications',
+                name: 'usersVolunteerApplications',
+                component: () => import('@/views/back/users/volunteer-applications.vue')
+            },
             // 内容管理
             {
                 path: 'content/stories',
@@ -231,6 +236,26 @@ const router = new VueRouter({
     }
 })
 
+// 处理路由重复导航错误
+const originalPush = VueRouter.prototype.push
+const originalReplace = VueRouter.prototype.replace
+
+VueRouter.prototype.push = function push(location) {
+    return originalPush.call(this, location).catch(err => {
+        if (err.name !== 'NavigationDuplicated' && !err.message.includes('Redirected')) {
+            throw err
+        }
+    })
+}
+
+VueRouter.prototype.replace = function replace(location) {
+    return originalReplace.call(this, location).catch(err => {
+        if (err.name !== 'NavigationDuplicated' && !err.message.includes('Redirected')) {
+            throw err
+        }
+    })
+}
+
 // 路由守卫：检查后台系统访问权限
 router.beforeEach((to, from, next) => {
     // 检查是否是后台路由
@@ -272,6 +297,17 @@ router.beforeEach((to, from, next) => {
                         replace: true
                     })
                 }
+                return
+            }
+            
+            // 志愿者权限限制：不能访问志愿者管理和志愿者申请页面
+            const adminOnlyPaths = ['/back/users/volunteers', '/back/users/volunteer-applications']
+            if (user.role === 'volunteer' && adminOnlyPaths.includes(to.path)) {
+                // 志愿者无权访问，跳转到后台首页
+                next({
+                    path: '/back/statistics/overview',
+                    replace: true
+                })
                 return
             }
         } catch (e) {

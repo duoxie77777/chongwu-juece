@@ -49,9 +49,13 @@
                     <i class="el-icon-s-order"></i>
                     <span>领养申请</span>
                 </el-menu-item>
-                <el-menu-item index="/back/users/volunteers">
+                <el-menu-item v-if="isAdmin" index="/back/users/volunteers">
                     <i class="el-icon-s-custom"></i>
                     <span>志愿者</span>
+                </el-menu-item>
+                <el-menu-item v-if="isAdmin" index="/back/users/volunteer-applications">
+                    <i class="el-icon-s-check"></i>
+                    <span>志愿者申请</span>
                 </el-menu-item>
             </el-submenu>
 
@@ -124,6 +128,25 @@ export default {
             isCollapse: false,
             activeMenu: '/back/statistics/overview',
             defaultOpeneds: []
+        }
+    },
+    computed: {
+        // 获取当前用户角色
+        currentUserRole() {
+            const userInfo = localStorage.getItem('adminInfo')
+            if (userInfo) {
+                try {
+                    const user = JSON.parse(userInfo)
+                    return user.role || 'user'
+                } catch (e) {
+                    return 'user'
+                }
+            }
+            return 'user'
+        },
+        // 是否是管理员
+        isAdmin() {
+            return this.currentUserRole === 'admin'
         }
     },
     watch: {
@@ -235,12 +258,12 @@ export default {
     }
 
     .logo {
-        font-size: 36px;
+        font-size: 46px;
         margin-bottom: 10px;
     }
 
     h2 {
-        font-size: 16px;
+        font-size: 26px;
         margin: 0;
         font-weight: 600;
         color: #333;
