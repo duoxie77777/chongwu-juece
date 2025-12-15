@@ -1099,16 +1099,17 @@ const applyVolunteer = async (req, res, next) => {
             reasonStr = `${reasonStr}\n健康状况：${health}`;
         }
 
-        // 创建志愿者申请记录
+        // 创建志愿者申请记录（包含user_id）
         const applicationSql = `
             INSERT INTO volunteer_applications (
-                name, age, gender, phone, email, address,
+                user_id, name, age, gender, phone, email, address,
                 occupation, education, roles, available_time,
                 experience, reason, status, create_time, update_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
         `;
         
         const applicationParams = [
+            userId || null,
             name,
             age || null,
             gender || null,
@@ -1148,6 +1149,235 @@ const applyVolunteer = async (req, res, next) => {
     }
 };
 
+// 获取所有志愿者申请列表
+const getVolunteerApplications = async (req, res, next) => {
+    try {
+        const { page = 1, size = 10, status, keyword } = req.query;
+        const offset = (page - 1) * size;
+        
+        let sql = `
+            SELECT va.*, u.username, u.avatar
+            FROM volunteer_applications va
+            LEFT JOIN users u ON va.phone = u.phone OR va.email = u.email
+            WHERE 1=1
+        `;
+        const params = [];
+        
+        if (status) {
+            sql += ' AND va.status = ?';
+            params.push(status);
+        }
+        
+        if (keyword) {
+            sql += ' AND (va.name LIKE ? OR va.phone LIKE ? OR va.email LIKE ?)';
+            params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+        }
+        
+        // 获取总数
+        const countSql = sql.replace('SELECT va.*, u.username, u.avatar', 'SELECT COUNT(*) as total');
+        const [countResult] = await db.query(countSql, params);
+        const total = countResult[0].total;
+        
+        // 添加排序和分页
+        sql += ' ORDER BY va.create_time DESC LIMIT ? OFFSET ?';
+        params.push(parseInt(size), parseInt(offset));
+        
+        const [applications] = await db.query(sql, params);
+        
+        res.json({
+            code: 200,
+            data: applications,
+            pagination: {
+                page: parseInt(page),
+                size: parseInt(size),
+                total
+            }
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// 获取志愿者申请统计
+const getVolunteerApplicationStats = async (req, res, next) => {
+    try {
+        const [result] = await db.query(`
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+                SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+            FROM volunteer_applications
+        `);
+        
+        res.json({
+            code: 200,
+            data: result[0]
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// 获取志愿者申请详情
+const getVolunteerApplicationDetail = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        
+        const [applications] = await db.query(`
+            SELECT va.*, u.id as user_id, u.username, u.avatar
+            FROM volunteer_applications va
+            LEFT JOIN users u ON va.phone = u.phone OR va.email = u.email
+            WHERE va.id = ?
+        `, [id]);
+        
+        if (applications.length === 0) {
+            return res.status(404).json({
+                code: 404,
+                message: '申请不存在'
+            });
+        }
+        
+        res.json({
+            code: 200,
+            data: applications[0]
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// 审批志愿者申请
+const updateVolunteerApplicationStatus = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { status, review_comment } = req.body;
+        
+        if (!['approved', 'rejected'].includes(status)) {
+            return res.status(400).json({
+                code: 400,
+                message: '无效的状态值'
+            });
+        }
+        
+        // 获取申请信息
+        const [applications] = await db.query(
+            'SELECT * FROM volunteer_applications WHERE id = ?',
+            [id]
+        );
+        
+        if (applications.length === 0) {
+            return res.status(404).json({
+                code: 404,
+                message: '申请不存在'
+            });
+        }
+        
+        const application = applications[0];
+        
+        // 更新申请状态
+        await db.query(
+            `UPDATE volunteer_applications 
+             SET status = ?, review_comment = ?, review_time = NOW(), update_time = NOW() 
+             WHERE id = ?`,
+            [status, review_comment || null, id]
+        );
+        
+        // 如果审批通过，更新用户角色和志愿者状态
+        if (status === 'approved') {
+            let userId = application.user_id;
+            
+            // 如果没有user_id，尝试通过phone或email匹配
+            if (!userId) {
+                const [users] = await db.query(
+                    'SELECT id FROM users WHERE phone = ? OR email = ?',
+                    [application.phone, application.email]
+                );
+                if (users.length > 0) {
+                    userId = users[0].id;
+                }
+            }
+            
+            if (userId) {
+                // 更新用户角色为志愿者
+                await db.query(
+                    'UPDATE users SET role = ?, update_time = NOW() WHERE id = ?',
+                    ['volunteer', userId]
+                );
+                
+                // 检查志愿者记录是否存在，不存在则创建
+                const [existingVolunteer] = await db.query(
+                    'SELECT id FROM volunteers WHERE user_id = ?',
+                    [userId]
+                );
+                
+                if (existingVolunteer.length > 0) {
+                    // 更新志愿者状态为活跃
+                    await db.query(
+                        'UPDATE volunteers SET status = ?, update_time = NOW() WHERE user_id = ?',
+                        ['active', userId]
+                    );
+                } else {
+                    // 创建志愿者记录
+                    await db.query(
+                        `INSERT INTO volunteers (user_id, level, service_hours, activity_count, join_date, status, create_time, update_time)
+                         VALUES (?, 'junior', 0, 0, CURDATE(), 'active', NOW(), NOW())`,
+                        [userId]
+                    );
+                }
+            }
+        }
+        
+        res.json({
+            code: 200,
+            message: status === 'approved' ? '申请已通过' : '申请已拒绝'
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
+// 管理员重置用户密码
+const adminResetPassword = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const { newPassword } = req.body;
+        
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({
+                code: 400,
+                message: '密码长度不能少于6位'
+            });
+        }
+        
+        // 检查用户是否存在
+        const [users] = await db.query('SELECT id FROM users WHERE id = ?', [id]);
+        if (users.length === 0) {
+            return res.status(404).json({
+                code: 404,
+                message: '用户不存在'
+            });
+        }
+        
+        // 加密新密码
+        const bcrypt = require('bcryptjs');
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        // 更新密码
+        await db.query(
+            'UPDATE users SET password = ?, update_time = NOW() WHERE id = ?',
+            [hashedPassword, id]
+        );
+        
+        res.json({
+            code: 200,
+            message: '密码重置成功'
+        });
+    } catch (err) {
+        next(err);
+    }
+};
+
 module.exports = { 
     getAllUsers, 
     getUserDetail, 
@@ -1162,5 +1392,10 @@ module.exports = {
     getUserAdoptions,
     getUserVolunteerInfo,
     applyVolunteer,
-    getUserOrders
+    getUserOrders,
+    getVolunteerApplications,
+    getVolunteerApplicationStats,
+    getVolunteerApplicationDetail,
+    updateVolunteerApplicationStatus,
+    adminResetPassword
 };

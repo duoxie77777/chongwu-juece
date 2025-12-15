@@ -8,6 +8,12 @@ const commentController = require('../controllers/storyCommentRoutes')
 // 获取评论统计
 router.get('/stats', commentController.getCommentStats)
 
+// 获取评论情感统计
+router.get('/sentiment/stats', commentController.getSentimentAnalysis)
+
+// 单独分析文本情感
+router.post('/sentiment/analyze', commentController.analyzeText)
+
 // 获取评论列表
 router.get('/list', commentController.getCommentList)
 

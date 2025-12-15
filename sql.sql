@@ -184,6 +184,8 @@ CREATE TABLE IF NOT EXISTS `story_comments` (
   `user_name` VARCHAR(50) NOT NULL,
   `content` TEXT NOT NULL,
   `likes` INT(11) DEFAULT 0,
+  `sentiment_score` DECIMAL(4,2) DEFAULT NULL COMMENT '情感分数(-1到1)',
+  `sentiment_label` VARCHAR(10) DEFAULT NULL COMMENT '情感标签(积极/消极/中性)',
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='故事评论表';

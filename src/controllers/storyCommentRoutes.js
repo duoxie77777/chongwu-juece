@@ -2,6 +2,7 @@
  * 故事评论管理接口
  */
 const { db } = require('../config/database');
+const { analyzeSentiment, getSentimentStats } = require('../utils/sentimentAnalyzer');
 
 /**
  * 获取故事评论列表（支持分页）
@@ -171,14 +172,19 @@ const createComment = async (req, res) => {
             })
         }
 
+        // 情感分析
+        const sentimentResult = analyzeSentiment(content)
+
         const [result] = await db.query(
             `INSERT INTO story_comments 
-             (story_id, user_name, content) 
-             VALUES (?, ?, ?)`,
+             (story_id, user_name, content, sentiment_score, sentiment_label) 
+             VALUES (?, ?, ?, ?, ?)`,
             [
                 story_id, 
                 user_name, 
-                content
+                content,
+                sentimentResult.score,
+                sentimentResult.label
             ]
         )
 
@@ -186,7 +192,8 @@ const createComment = async (req, res) => {
             code: 200,
             message: '评论成功',
             data: { 
-                id: result.insertId
+                id: result.insertId,
+                sentiment: sentimentResult
             }
         })
     } catch (error) {
@@ -367,6 +374,105 @@ const getCommentStats = async (req, res) => {
     }
 }
 
+/**
+ * 获取评论情感统计
+ */
+const getSentimentAnalysis = async (req, res) => {
+    try {
+        const { story_id } = req.query
+
+        let sql = `SELECT sentiment_label, COUNT(*) as count FROM story_comments WHERE sentiment_label IS NOT NULL`
+        const params = []
+
+        if (story_id) {
+            sql += ` AND story_id = ?`
+            params.push(story_id)
+        }
+
+        sql += ` GROUP BY sentiment_label`
+
+        const [sentimentCounts] = await db.query(sql, params)
+
+        // 获取平均情感分数
+        let avgSql = `SELECT AVG(sentiment_score) as avgScore FROM story_comments WHERE sentiment_score IS NOT NULL`
+        if (story_id) {
+            avgSql += ` AND story_id = ?`
+        }
+        const [avgResult] = await db.query(avgSql, story_id ? [story_id] : [])
+
+        // 整理统计数据
+        const stats = {
+            positive: 0,
+            negative: 0,
+            neutral: 0,
+            total: 0,
+            averageScore: avgResult[0].avgScore ? Math.round(avgResult[0].avgScore * 100) / 100 : 0
+        }
+
+        for (const item of sentimentCounts) {
+            if (item.sentiment_label === '积极') stats.positive = item.count
+            else if (item.sentiment_label === '消极') stats.negative = item.count
+            else if (item.sentiment_label === '中性') stats.neutral = item.count
+            stats.total += item.count
+        }
+
+        // 计算百分比
+        const percentages = {
+            positive: stats.total > 0 ? Math.round((stats.positive / stats.total) * 100) : 0,
+            negative: stats.total > 0 ? Math.round((stats.negative / stats.total) * 100) : 0,
+            neutral: stats.total > 0 ? Math.round((stats.neutral / stats.total) * 100) : 0
+        }
+
+        res.json({
+            code: 200,
+            message: '获取成功',
+            data: {
+                counts: stats,
+                percentages,
+                averageScore: stats.averageScore
+            }
+        })
+    } catch (error) {
+        console.error('获取情感统计失败:', error)
+        res.status(500).json({
+            code: 500,
+            message: '获取情感统计失败',
+            error: error.message
+        })
+    }
+}
+
+/**
+ * 单独分析文本情感（不保存）
+ */
+const analyzeText = async (req, res) => {
+    try {
+        const { text } = req.body
+
+        if (!text) {
+            return res.status(400).json({
+                code: 400,
+                message: '文本内容不能为空'
+            })
+        }
+
+        const result = analyzeSentiment(text)
+
+        res.json({
+            code: 200,
+            message: '分析成功',
+            data: result
+        })
+    } catch (error) {
+        console.error('情感分析失败:', error)
+        res.status(500).json({
+            code: 500,
+            message: '情感分析失败',
+            error: error.message
+        })
+    }
+}
+
 module.exports = {
     getCommentList,
     getCommentsByStoryId,
@@ -375,5 +481,7 @@ module.exports = {
     updateComment,
     deleteComment,
     likeComment,
-    getCommentStats
+    getCommentStats,
+    getSentimentAnalysis,
+    analyzeText
 }
